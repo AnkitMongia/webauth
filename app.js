@@ -9,15 +9,16 @@ app.use(bodyParser.urlencoded({extended:true}));
 app.use(express.static("public"));
 
 const mongoose= require("mongoose");
+const encrypt= require("mongoose-encryption");
 mongoose.connect("mongodb://127.0.0.1:27017/usersDB");
 
 const userSchema= new mongoose.Schema({
     email: String,
     password: String
 });
+const secret= "usethistoencrypt";
+userSchema.plugin(encrypt, { secret: secret, encryptedFields: ['password'] })
 const User= new mongoose.model("User", userSchema);
-
-
 
 
 
