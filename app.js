@@ -6,6 +6,8 @@ const ejs = require("ejs");
 const session = require("express-session");
 const passport = require("passport");
 const passportLocalMongoose= require("passport-local-mongoose");
+var GoogleStrategy = require('passport-google-oauth20').Strategy;
+var findOrCreate = require('mongoose-findorcreate');
 
 const app = express();
 app.set('view engine', 'ejs');
@@ -26,15 +28,31 @@ mongoose.connect("mongodb://127.0.0.1:27017/usersDB");
 
 const userSchema = new mongoose.Schema({
     username: String,
-    password: String
+    password: String,
+    googleId: String
 });
 
 userSchema.plugin(passportLocalMongoose, {usernameField: 'email'});
+userSchema.plugin(findOrCreate);
 const User = new mongoose.model("User", userSchema);
-passport.use(User.createStrategy({}));
 
+/* register passport-local-mongoose */
+passport.use(User.createStrategy({}));
 passport.serializeUser(User.serializeUser());
 passport.deserializeUser(User.deserializeUser());
+
+/* Oauth2.0 google */
+passport.use(new GoogleStrategy({
+    clientID: process.env.GOOGLE_CLIENT_ID,
+    clientSecret: process.env.GOOGLE_CLIENT_SECRET,
+    callbackURL: "http://localhost:3000/auth/google/secrets"
+  },
+  function(accessToken, refreshToken, profile, cb) {
+    User.findOrCreate({ googleId: profile.id , email: profile.emails[0].value}, function (err, user) {
+      return cb(err, user);
+    });
+  }
+));
 
 
 app.get("/", (req, res) => {
@@ -66,6 +84,13 @@ app.post("/login", passport.authenticate("local", {username : "email"}), (req, r
     })*/
 });
 
+app.get("/logout", (req, res)=>{
+    req.logOut((err)=>{
+        if(!err)
+            res.send("logout success");
+    });
+});
+
 app.get("/register", (req, res) => {
     res.render("register");
 });
@@ -90,7 +115,14 @@ app.get("/secrets", (req, res)=>{
     else{
         res.redirect("/login");
     }
-})
+});
+
+app.get("/auth/google", passport.authenticate("google", { scope: ['profile', 'email'] }));
+
+app.get("/auth/google/secrets", passport.authenticate("google", 
+            {failureRedirect:"/login"}), (req,res)=>{
+                res.redirect("/secrets");
+});
 
 app.listen(3000, () => {
     console.log("Server listening on 3000");
